@@ -29,7 +29,6 @@ import java.util.Map;
 public class BloatHandler extends RoomHandler implements RenderCallback
 {
 	private boolean isBloatAlive = false;
-    private final Map<LocalPoint, GroundObject> hiddenObjects = new HashMap<>();
     private int bloatSkyboxColor;
     private boolean bloatSkyboxOverride;
     private boolean hideBloatFloor;
@@ -101,7 +100,6 @@ public class BloatHandler extends RoomHandler implements RenderCallback
         switch (event.getGameState())
         {
             case LOADING:
-                hiddenObjects.clear();
                 break;
 
             case LOGGED_IN:
@@ -112,7 +110,6 @@ public class BloatHandler extends RoomHandler implements RenderCallback
                 break;
 
             case LOGIN_SCREEN:
-                hiddenObjects.clear();
                 restoreHdConfig();
                 break;
         }
