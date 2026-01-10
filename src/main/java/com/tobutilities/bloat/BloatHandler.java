@@ -12,10 +12,12 @@ import lombok.extern.slf4j.Slf4j;
 
 import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.BeforeRender;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 
+import net.runelite.client.callback.RenderCallback;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
@@ -24,7 +26,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
-public class BloatHandler extends RoomHandler
+public class BloatHandler extends RoomHandler implements RenderCallback
 {
 	private boolean isBloatAlive = false;
     private final Map<LocalPoint, GroundObject> hiddenObjects = new HashMap<>();
@@ -44,7 +46,22 @@ public class BloatHandler extends RoomHandler
 		super(plugin, config, client);
 	}
 
-	public boolean shouldDraw(Renderable renderable, boolean drawingUi)
+    @Override
+    public boolean drawObject(Scene scene, TileObject object)
+    {
+        if (!(object instanceof GroundObject)) {
+            return RenderCallback.super.drawObject(scene, object);
+        }
+        GroundObject groundObject = (GroundObject) object;
+        if (hideBloatFloor && BloatConstants.BLOAT_FLOOR_IDS.contains(groundObject.getId())) {
+            return false;
+        }
+
+        return RenderCallback.super.drawObject(scene, object);
+    }
+
+    @Override
+    public boolean addEntity(Renderable renderable, boolean drawingUi)
 	{
 		if (renderable instanceof Player && isBloatAlive)
 		{
@@ -76,7 +93,6 @@ public class BloatHandler extends RoomHandler
 			}
 		}
         updateHdConfig();
-        updateGroundObjects();
 	}
 
     @Subscribe
@@ -91,7 +107,6 @@ public class BloatHandler extends RoomHandler
             case LOGGED_IN:
                 if (plugin.region == Region.BLOAT)
                 {
-                    updateGroundObjects();
                     updateHdConfig();
                 }
                 break;
@@ -121,7 +136,6 @@ public class BloatHandler extends RoomHandler
             {
                 case "hideBloatFloor":
                     hideBloatFloor = config.hideBloatFloor();
-                    updateGroundObjects();
                     break;
 
                 case "bloatSkyboxOverride":
@@ -134,105 +148,6 @@ public class BloatHandler extends RoomHandler
                     break;
             }
         }
-    }
-
-    private void updateGroundObjects()
-    {
-        if (hideBloatFloor)
-        {
-            hideGroundObjects();
-        }
-        else
-        {
-            unhideGroundObjects();
-        }
-    }
-
-    private void hideGroundObjects()
-    {
-        Scene scene = client.getTopLevelWorldView().getScene();
-
-        if (scene == null)
-        {
-            return;
-        }
-
-        Tile[][][] tiles = scene.getTiles();
-
-        for (int z = 0; z < Constants.MAX_Z; z++)
-        {
-            if (tiles[z] == null) continue;
-
-            for (int x = 0; x < Constants.SCENE_SIZE; x++)
-            {
-                if (tiles[z][x] == null) continue;
-
-                for (int y = 0; y < Constants.SCENE_SIZE; y++)
-                {
-                    Tile tile = tiles[z][x][y];
-                    if (tile == null)
-                    {
-                        continue;
-                    }
-
-                    GroundObject groundObject = tile.getGroundObject();
-                    if (groundObject != null && BLOAT_FLOOR_IDS.contains(groundObject.getId()))
-                    {
-                        LocalPoint lp = tile.getLocalLocation();
-
-                        // Skip if already hidden
-                        if (hiddenObjects.containsKey(lp)) continue;
-
-                        // Cache original object
-                        hiddenObjects.put(lp, groundObject);
-
-                        // Remove it from the scene
-                        tile.setGroundObject(null);
-                    }
-                }
-            }
-        }
-    }
-
-    private void unhideGroundObjects()
-    {
-        Scene scene = client.getTopLevelWorldView().getScene();
-        if (scene == null)
-        {
-            hiddenObjects.clear();
-            return;
-        }
-
-        for (Map.Entry<LocalPoint, GroundObject> entry : hiddenObjects.entrySet())
-        {
-            LocalPoint lp = entry.getKey();
-            Tile tile = getTileAtLocalPoint(lp);
-            if (tile == null)
-                continue;
-
-            // Restore ground object if not already present
-            if (tile.getGroundObject() == null)
-            {
-                tile.setGroundObject(entry.getValue());
-            }
-        }
-        hiddenObjects.clear();
-    }
-
-    private Tile getTileAtLocalPoint(LocalPoint point)
-    {
-        WorldView wv = client.getTopLevelWorldView();
-        Scene scene = wv.getScene();
-        Tile[][] tiles = scene.getTiles()[wv.getPlane()];
-        int sceneX = point.getSceneX();
-        int sceneY = point.getSceneY();
-
-        if (sceneX < 0 || sceneY < 0 || sceneX >= Constants.SCENE_SIZE || sceneY >= Constants.SCENE_SIZE)
-        {
-            return null;
-        }
-
-        return tiles[sceneX][sceneY];
     }
 
     private void updateHdConfig() {
@@ -287,7 +202,6 @@ public class BloatHandler extends RoomHandler
     public void onRoomExit()
     {
         restoreHdConfig();
-        unhideGroundObjects();
     }
 
     public void startUp()
@@ -297,7 +211,6 @@ public class BloatHandler extends RoomHandler
         bloatSkyboxOverride = config.enableBloatSkyboxOverride();
         if (client.getGameState() == GameState.LOGGED_IN)
         {
-            updateGroundObjects();
             updateHdConfig();
         }
     }
