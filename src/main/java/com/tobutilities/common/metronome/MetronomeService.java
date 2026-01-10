@@ -9,6 +9,8 @@ import java.awt.event.KeyEvent;
 import java.util.Random;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+
+import com.tobutilities.common.util.CommonUtils;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -57,11 +59,7 @@ public class MetronomeService
 	public void onGameTick(GameTick tick)
 	{
 		int regionTickCount;
-		Player player = client.getLocalPlayer();
-		final LocalPoint playerLocation = player.getLocalLocation();
-		WorldPoint playerLocationPoint = WorldPoint.fromLocalInstance(client, playerLocation);
-		final int regionId = playerLocationPoint.getRegionID();
-		Region newTickRegion = getRegionByRegionId(regionId);
+		Region newTickRegion = CommonUtils.getRegionByRegionId(CommonUtils.getRegionID(client));
 
 		if (newTickRegion != plugin.region)
 		{
