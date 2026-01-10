@@ -2,6 +2,7 @@ package com.tobutilities;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.inject.Provides;
+import com.tobutilities.bloat.BloatConstants;
 import com.tobutilities.bloat.BloatHandler;
 import com.tobutilities.bloat.BloatPlayerOverlay;
 import com.tobutilities.common.metronome.MetronomeService;
@@ -23,9 +24,14 @@ import com.tobutilities.verzik.VerzikHandler;
 
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import net.runelite.api.coords.LocalPoint;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.*;
 
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.callback.Hooks;
+import net.runelite.client.callback.RenderCallback;
+import net.runelite.client.callback.RenderCallbackManager;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
@@ -98,9 +104,40 @@ public class TobUtilitiesPlugin extends Plugin
 	@Inject
 	private WSClient wsClient;
 
+	@Inject
+	private RenderCallbackManager renderCallbackManager;
+
+	@Inject
+	private ClientThread clientThread;
+
 
 	public Region region = Region.UNKNOWN;
 	private final Hooks.RenderableDrawListener drawListener = this::shouldDraw;
+
+	private final RenderCallback renderCallback = new RenderCallback() {
+
+		@Override
+		public boolean drawObject(Scene scene, TileObject object) {
+			if (object instanceof GroundObject) {
+				GroundObject groundObject = (GroundObject) object;
+				if (BloatConstants.BLOAT_FLOOR_IDS.contains(groundObject.getId())) {
+					Player player = client.getLocalPlayer();
+					final LocalPoint playerLocation = player.getLocalLocation();
+					WorldPoint playerLocationPoint = WorldPoint.fromLocalInstance(client, playerLocation);
+					final int regionId = playerLocationPoint.getRegionID();
+					log.info("regionid at time of drawobject bloat floor: {}", regionId);
+					log.info("called drawing bloat floor with id: {} in region: {}", groundObject.getId(), region.getRegionId());
+				}
+			}
+
+
+			if (region.equals(Region.BLOAT)) {
+				return bloatHandler.drawObject(scene, object);
+			}
+
+			return RenderCallback.super.drawObject(scene, object);
+		}
+	};
 
 	@Provides
 	TobUtilitiesConfig provideConfig(ConfigManager configManager)
@@ -165,6 +202,7 @@ public class TobUtilitiesPlugin extends Plugin
 			hotkeyReleased();
 		}
 	};
+
 
 
 	@Subscribe
@@ -252,7 +290,9 @@ public class TobUtilitiesPlugin extends Plugin
     public void onConfigChanged(ConfigChanged event)
     {
         bloatHandler.onConfigChanged(event);
-    }
+
+		clientThread.invokeLater(this::tryReloadScene);
+	}
 
     @Subscribe
     public void onGameStateChanged(GameStateChanged event)
@@ -280,6 +320,9 @@ public class TobUtilitiesPlugin extends Plugin
 		keyManager.registerKeyListener(hideVerzikHotkeyListener);
 		keyManager.registerKeyListener(metronomeResetHotkeyListener);
 		hooks.registerRenderableDrawListener(drawListener);
+		renderCallbackManager.register(renderCallback);
+
+		clientThread.invokeLater(this::tryReloadScene);
 	}
 
 	@Override
@@ -304,5 +347,14 @@ public class TobUtilitiesPlugin extends Plugin
 		keyManager.unregisterKeyListener(hideVerzikHotkeyListener);
 		keyManager.unregisterKeyListener(metronomeResetHotkeyListener);
 		hooks.unregisterRenderableDrawListener(drawListener);
+		renderCallbackManager.unregister(renderCallback);
+
+		clientThread.invokeLater(this::tryReloadScene);
+	}
+
+	private void tryReloadScene() {
+		assert client.isClientThread();
+		if (client.getGameState() == GameState.LOGGED_IN)
+			client.setGameState(GameState.LOADING);
 	}
 }
