@@ -78,7 +78,7 @@ public class BloatHandler extends RoomHandler implements RenderCallback
 				return !config.hideOtherPlayersDuringBloat();
 			}
 		}
-		return true;
+		return RenderCallback.super.addEntity(renderable, drawingUi);
 	}
 
 	@Subscribe
