@@ -1,6 +1,10 @@
 package com.tobutilities.common.util;
 
 import com.tobutilities.common.enums.Region;
+import net.runelite.api.Client;
+import net.runelite.api.Player;
+import net.runelite.api.coords.LocalPoint;
+import net.runelite.api.coords.WorldPoint;
 
 public class CommonUtils
 {
@@ -25,5 +29,12 @@ public class CommonUtils
 			default:
 				return Region.UNKNOWN;
 		}
+	}
+
+	public static int getRegionID(Client client) {
+		Player player = client.getLocalPlayer();
+		final LocalPoint playerLocation = player.getLocalLocation();
+		WorldPoint playerLocationPoint = WorldPoint.fromLocalInstance(client, playerLocation);
+		return playerLocationPoint.getRegionID();
 	}
 }

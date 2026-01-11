@@ -2,11 +2,13 @@ package com.tobutilities;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.inject.Provides;
+import com.tobutilities.bloat.BloatConstants;
 import com.tobutilities.bloat.BloatHandler;
 import com.tobutilities.bloat.BloatPlayerOverlay;
 import com.tobutilities.common.metronome.MetronomeService;
 import com.tobutilities.common.metronome.MetronomeOverlay;
 import com.tobutilities.common.enums.Region;
+import com.tobutilities.common.util.CommonUtils;
 import com.tobutilities.maiden.MaidenHandler;
 import com.tobutilities.maiden.ScuffWarningOverlay;
 import com.tobutilities.maiden.ScuffedNylocasOverlay;
@@ -23,9 +25,14 @@ import com.tobutilities.verzik.VerzikHandler;
 
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import net.runelite.api.coords.LocalPoint;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.*;
 
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.callback.Hooks;
+import net.runelite.client.callback.RenderCallback;
+import net.runelite.client.callback.RenderCallbackManager;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
@@ -98,9 +105,44 @@ public class TobUtilitiesPlugin extends Plugin
 	@Inject
 	private WSClient wsClient;
 
+	@Inject
+	private RenderCallbackManager renderCallbackManager;
+
+	@Inject
+	private ClientThread clientThread;
+
 
 	public Region region = Region.UNKNOWN;
 	private final Hooks.RenderableDrawListener drawListener = this::shouldDraw;
+
+	private final RenderCallback renderCallback = new RenderCallback() {
+
+		@Override
+		public boolean drawObject(Scene scene, TileObject object) {
+			// Need to calculate the region in this call instead of using the shared one updated by the metronome because
+			// this will get called before onGameTick, so the region will be incorrect when walking into a new room.
+			Region localRegion = CommonUtils.getRegionByRegionId(CommonUtils.getRegionID(client));
+
+			if (localRegion.equals(Region.BLOAT)) {
+				return bloatHandler.drawObject(scene, object);
+			}
+
+			return RenderCallback.super.drawObject(scene, object);
+		}
+
+		@Override
+		public boolean addEntity(Renderable renderable, boolean drawingUi) {
+			// Need to calculate the region in this call instead of using the shared one updated by the metronome because
+			// this will get called before onGameTick, so the region will be incorrect when walking into a new room.
+			Region localRegion = CommonUtils.getRegionByRegionId(CommonUtils.getRegionID(client));
+
+			if (localRegion.equals(Region.BLOAT)) {
+				return bloatHandler.addEntity(renderable, drawingUi);
+			}
+
+			return RenderCallback.super.addEntity(renderable, drawingUi);
+		}
+	};
 
 	@Provides
 	TobUtilitiesConfig provideConfig(ConfigManager configManager)
@@ -166,7 +208,7 @@ public class TobUtilitiesPlugin extends Plugin
 		}
 	};
 
-
+	
 	@Subscribe
 	public void onNpcSpawned(NpcSpawned event)
 	{
@@ -184,11 +226,6 @@ public class TobUtilitiesPlugin extends Plugin
 	@VisibleForTesting
 	boolean shouldDraw(Renderable renderable, boolean drawingUI)
 	{
-		if (Region.BLOAT.equals(region))
-		{
-			return bloatHandler.shouldDraw(renderable, drawingUI);
-		}
-
 		if (Region.VERZIK.equals(region))
 		{
 			return verzikHandler.shouldDraw(renderable, drawingUI);
@@ -252,7 +289,9 @@ public class TobUtilitiesPlugin extends Plugin
     public void onConfigChanged(ConfigChanged event)
     {
         bloatHandler.onConfigChanged(event);
-    }
+
+		clientThread.invokeLater(this::tryReloadScene);
+	}
 
     @Subscribe
     public void onGameStateChanged(GameStateChanged event)
@@ -280,6 +319,9 @@ public class TobUtilitiesPlugin extends Plugin
 		keyManager.registerKeyListener(hideVerzikHotkeyListener);
 		keyManager.registerKeyListener(metronomeResetHotkeyListener);
 		hooks.registerRenderableDrawListener(drawListener);
+		renderCallbackManager.register(renderCallback);
+
+		clientThread.invokeLater(this::tryReloadScene);
 	}
 
 	@Override
@@ -304,5 +346,14 @@ public class TobUtilitiesPlugin extends Plugin
 		keyManager.unregisterKeyListener(hideVerzikHotkeyListener);
 		keyManager.unregisterKeyListener(metronomeResetHotkeyListener);
 		hooks.unregisterRenderableDrawListener(drawListener);
+		renderCallbackManager.unregister(renderCallback);
+
+		clientThread.invokeLater(this::tryReloadScene);
+	}
+
+	private void tryReloadScene() {
+		assert client.isClientThread();
+		if (client.getGameState() == GameState.LOGGED_IN)
+			client.setGameState(GameState.LOADING);
 	}
 }
