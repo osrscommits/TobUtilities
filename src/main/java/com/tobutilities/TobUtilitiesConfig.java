@@ -473,6 +473,23 @@ public interface TobUtilitiesConfig extends Config
 		return new Color(89, 0, 0);
 	}
 
+	@ConfigSection(
+			name = "Sotetseg",
+			description = "Change Sotetseg settings",
+			position = 4
+	)
+	String Sotetseg = "Sotetseg Settings";
 
+	@ConfigItem(
+			keyName = "hideSoteWalls",
+			name = "Hide Sotetseg Walls",
+			description = "Enable hiding back walls at Sotetseg",
+			position = 1,
+			section = Sotetseg
+	)
+	default boolean hideSotetsegWalls()
+	{
+		return false;
+	}
 }
 

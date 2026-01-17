@@ -19,6 +19,7 @@ import com.tobutilities.common.player.PlayerFourOrbOverlay;
 import com.tobutilities.common.player.PlayerFiveOrbOverlay;
 import com.tobutilities.nylocas.NylocasHandler;
 import com.tobutilities.nylocas.NylocasOverlay;
+import com.tobutilities.sote.SoteHandler;
 import com.tobutilities.verzik.DawnbringerStatusMessage;
 import com.tobutilities.verzik.LightbearerWarningOverlay;
 import com.tobutilities.verzik.VerzikHandler;
@@ -99,6 +100,9 @@ public class TobUtilitiesPlugin extends Plugin
 	private NylocasHandler nylocasHandler;
 
 	@Inject
+	private SoteHandler soteHandler;
+
+	@Inject
 	private VerzikHandler verzikHandler;
 	@Inject
 	private MetronomeService metronomeService;
@@ -125,6 +129,8 @@ public class TobUtilitiesPlugin extends Plugin
 
 			if (localRegion.equals(Region.BLOAT)) {
 				return bloatHandler.drawObject(scene, object);
+			} else if (localRegion.equals(Region.SOTETSEG)) {
+				return soteHandler.drawObject(scene, object);
 			}
 
 			return RenderCallback.super.drawObject(scene, object);
@@ -162,6 +168,9 @@ public class TobUtilitiesPlugin extends Plugin
 		if (oldRegion.equals(Region.BLOAT) && !region.equals(Region.BLOAT))
 		{
 			bloatHandler.onRoomExit();
+		}
+		if (!oldRegion.equals(Region.SOTETSEG) && region.equals(Region.SOTETSEG)) {
+			soteHandler.onRoomEntry();
 		}
 		if (region.equals(Region.MAIDEN))
 		{
@@ -291,6 +300,7 @@ public class TobUtilitiesPlugin extends Plugin
     public void onConfigChanged(ConfigChanged event)
     {
         bloatHandler.onConfigChanged(event);
+		soteHandler.onConfigChanged(event);
 
 		clientThread.invokeLater(this::tryReloadScene);
 	}
@@ -316,6 +326,7 @@ public class TobUtilitiesPlugin extends Plugin
 		overlayManager.add(lightbearerWarningOverlay);
 		overlayManager.add(nylocasOverlay);
         bloatHandler.startUp();
+		soteHandler.startUp();
 		verzikHandler.startUp();
 		wsClient.registerMessage(DawnbringerStatusMessage.class);
 		keyManager.registerKeyListener(hideVerzikHotkeyListener);
